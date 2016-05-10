@@ -2,7 +2,8 @@
 
 import os
 import sys
-from osgeo import gdal, ogr
+import Image
+from osgeo import gdal, ogr, osr
 
 class Denoiser:
     _target_dir = None
@@ -17,6 +18,7 @@ class Denoiser:
         self.vectorize(raster_file)
         self.removeNoise(self._target_dir + self._shapefile + ".shp")
         self.rasterize(self._target_dir + self._shapefile + ".shp")
+        self.flipImage(self._target_dir + self._raster_file + ".tif")
 
     def createTargetDir(self, raster_file):
         self._target_dir = os.path.dirname(raster_file) + "/target/"
@@ -61,10 +63,10 @@ class Denoiser:
         
         raster = gdal.Open(raster_file)
         band = raster.GetRasterBand(1)
-        band_array = band.ReadAsArray()
+        #band_array = band.ReadAsArray()
         
         out_data_source = driver.CreateDataSource(self._target_dir + self._shapefile + ".shp")
-        out_layer = out_data_source.CreateLayer(self._shapefile, srs=None)
+        out_layer = out_data_source.CreateLayer(self._shapefile, None)
         new_field = ogr.FieldDefn("FLD1", ogr.OFTInteger)
         out_layer.CreateField(new_field)
         
@@ -101,6 +103,11 @@ class Denoiser:
         gdal.RasterizeLayer(raster, [1], layer, burn_values=[255])
         
         data_source.Destroy()
+
+    def flipImage(self, raster_file):
+        img = Image.open(raster_file)
+        out = img.transpose(Image.FLIP_TOP_BOTTOM)   
+        out.save(raster_file, "TIFF")  
     
 if __name__ == "__main__":
     raster_file = "./example.tif" 

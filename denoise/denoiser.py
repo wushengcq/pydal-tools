@@ -103,7 +103,7 @@ class Denoiser:
         data_source.Destroy()
     
 if __name__ == "__main__":
-    raster_file = "/home/ws/Workspace/python/gdal/source.tif" 
+    raster_file = "/home/ws/Workspace/python/gdal/exmaple.tif" 
     denoiser = Denoiser()
     denoiser.denoise(raster_file)
     

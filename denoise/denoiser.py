@@ -48,10 +48,21 @@ class Denoiser:
         print "Threshold Y: %s" % str(self._threshold_y) 
        
         print "Keep features:"
+        count = 10000
         for feature in layer:
             geom = feature.GetGeometryRef()
+            if geom is None: continue
             if self.boxFilter(geom):
-                print "\t" +  str(geom.GetEnvelope())
+                if self.areaFilter(geom):
+                    print "\t" +  str(geom.GetEnvelope())
+                    #nf = feature.Clone();
+                    #nf.SetFID(count)
+                    #nf.SetGeometry(self.circleCut(geom))
+                    #layer.CreateFeature(nf)
+                    #layer.DeleteFeature(feature.GetFID())
+                    count += 1
+                else:
+                    layer.DeleteFeature(feature.GetFID())
             else:
                 layer.DeleteFeature(feature.GetFID())
         dataSource.Destroy()
@@ -81,7 +92,48 @@ class Denoiser:
         if box[1] - box[0] <= self._threshold_x or box[3] - box[2] <= self._threshold_y:
             return False
         else:
-            return True           
+            return True
+
+    def areaFilter(self, geom):
+        a1 = geom.GetArea()
+        a2 = geom.ConvexHull().GetArea()   
+        if a1 / a2 > 0.3 :
+            return False
+        else:
+            return True        
+
+    def circleCut(self, geom):
+        centroid = geom.Centroid()
+        box = geom.GetEnvelope()
+        length = 0
+        if box[1] - box[0] > box[3] - box[2]:
+            length = box[3] - box[2]
+        else:
+            length = box[1] - box[0]
+
+        area = 0
+        for distance in self.frange(length/32, length/2, length/128):
+            circle = centroid.Buffer(distance, quadsecs = 60)
+            cutout = circle.Intersection(geom)
+            cutarea = cutout.GetArea()
+            if cutarea > 0:
+                if area == 0 :
+                    area = cutarea
+                else:
+                    print distance, area, cutarea, cutarea / area, cutout.GetGeometryCount()
+                    if cutarea / area >= 1 and cutarea / area <= 1.08 and cutout.GetGeometryCount() > 1:
+                        print "find cutout"
+                        print cutout
+                        return cutout
+                    else:
+                        area = cutarea
+    
+             
+    def frange(self, x, y, jump):
+        while x < y:
+            yield x
+            x += jump
+
  
     def rasterize(self, shapefile):
         driver = ogr.GetDriverByName("ESRI Shapefile")
@@ -111,6 +163,7 @@ class Denoiser:
     
 if __name__ == "__main__":
     raster_file = "./example.tif" 
+    raster_file = "./test2.tif" 
     denoiser = Denoiser()
     denoiser.denoise(raster_file)
     

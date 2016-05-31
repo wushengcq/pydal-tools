@@ -12,14 +12,15 @@ class Denoiser2:
     T = (464,432,480,308,306,
          240,216,184,180,178,153,154,
          90,89,  58,54,51, 30,27, 23, 496,488,440,436,434,410,409,
-         400,304,208,176,152,88,52,50,26,25,22,19, 272,144,80,48,24,20,18,17, 16
-         ,21,336)
+         400,304,208,176,152,88,52,50,26,25,22,19, 272,144,80,48,24,20,18,17, 16)
+         #,21,336)
 
     def denoise(self, raster_file):
         full_path = os.path.abspath(raster_file)
         img = io.imread(full_path)
         self.slim(img)
         self.erase(img)
+        self.slim(img)
         tmp_tif = self.createTargetDir(full_path) + "tmp1.tif"
         io.imsave(tmp_tif, img)
         print "Dnoised result by raster method : " + tmp_tif
@@ -71,6 +72,13 @@ class Denoiser2:
                     if m == self.T[i]:
                         img[r,c] = 0
                         break
+
+                if m == 21 and img[r+2,c] == 255:
+                    img[r,c] = 0
+
+                if m == 336 and img[r-2,c] == 255:
+                    img[r,c] = 0
+                
         return img
 
     def erase(self, img):
@@ -122,16 +130,17 @@ class Denoiser2:
             geom = feature.GetGeometryRef()
             if geom is None:
                 continue
-            if self.boxFilter(geom, extent):
+            if self.boxFilter(geom, extent) or self.areaFilter(geom):
                 layer.DeleteFeature(feature.GetFID())
             else:
                 print "keep : " + str(feature.GetFID())
+                geom = geom.ConvexHull()
 
         dataSource.Destroy()
 
     def boxFilter(self, geom, env):
-        threshold_x = (env[1] - env[0]) * 0.2
-        threshold_y = (env[3] - env[2]) * 0.2
+        threshold_x = (env[1] - env[0]) * 0.01
+        threshold_y = (env[3] - env[2]) * 0.01
         box = geom.GetEnvelope()
         if box == env:
             return True
@@ -139,6 +148,29 @@ class Denoiser2:
             return True
         else:
             return False
+
+    def areaFilter(self, geom):
+        a1 = geom.GetArea()
+        #a2 = geom.ConvexHull().GetArea()
+        (minX, maxX, minY, maxY) = geom.GetEnvelope()
+
+        # Create ring
+        ring = ogr.Geometry(ogr.wkbLinearRing)
+        ring.AddPoint(minX, minY)
+        ring.AddPoint(maxX, minY)
+        ring.AddPoint(maxX, maxY)
+        ring.AddPoint(minX, maxY)
+        ring.AddPoint(minX, minY)
+
+        # Create polygon
+        poly_env = ogr.Geometry(ogr.wkbPolygon)
+        poly_env.AddGeometry(ring)
+        a2 = poly_env.GetArea()
+
+        if a1 / a2 > 0.2 :
+            return False
+        else:
+            return True
 
     def rasterize(self, shapefile):
         tif_file = os.path.dirname(shapefile) + "/result.tiff"
